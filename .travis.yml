@@ -16,7 +16,8 @@ notifications:
     - justin@justinholmes.com
     on_success: change
     on_failure: always
-script: tox
+script:
+    - tox
 before_install:
   - pip install codecov
 after_success:
