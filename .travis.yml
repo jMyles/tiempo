@@ -2,11 +2,11 @@ language: python
 services:
   - redis-server
 # Caution - no way to invalidate this.  If we remove a dep, we might need to run a build with this block commented out.  Additionally, it seems that the python version needs to be ticked each time Travis upgrades. This is the price we pay for Travis caching.
-cache:
- directories:
-   - ~/virtualenv
-   - ~/miniconda
-   - ~/.cache/pip/
+#cache:
+# directories:
+#   - ~/virtualenv
+#   - ~/miniconda
+#   - ~/.cache/pip/
 notifications:
   email:
     recipients:
