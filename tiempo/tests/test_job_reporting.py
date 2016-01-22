@@ -1,4 +1,7 @@
+import datetime
+
 from twisted.trial.unittest import TestCase
+from twisted.internet.defer import Deferred
 from tiempo import TIEMPO_REGISTRY
 from tiempo.conn import REDIS
 from tiempo.exceptions import JobDataError
@@ -16,6 +19,7 @@ class JobReportingTests(TestCase):
 #    def __init__(self):
     decorated = Trabajo()(some_callable)
     simple_job = decorated.just_spawn_job()
+    runner = Runner(0, [1])
 
     def setup(self):
         TIEMPO_REGISTRY.clear()
@@ -40,10 +44,19 @@ class JobReportingTests(TestCase):
         cj = completed_jobs()
         self.assertFalse(cj)
 
+    def test_action_time_is_datetime(self):
+        self.assertIsInstance(self.runner.action_time, datetime.datetime)
+
+    def test_runner_is_busy(self):
+        job = self.simple_job.soon()
+        self.assertIsInstance(self.runner.cycle(), Deferred)
+        self.assertEqual(self.runner.cycle(), 500)
+        self.assertEqual(self.runner.cycle(), 500)
+        self.runner.run()
+
     def test_show_some_completed_jobs(self):
-        runner = Runner(0, [1])
         job = self.decorated.spawn_job_and_run_soon()
-        d = runner.cycle()
+        d = self.runner.cycle()
 
         def check(result, job):
             cj = completed_jobs()
