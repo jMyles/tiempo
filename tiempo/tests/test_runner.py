@@ -16,7 +16,6 @@ class RunnerTests(TestCase):
     """
     decorated = Trabajo()(some_callable)
     simple_job = decorated.just_spawn_job()
-    runner = Runner(0, [1])
 
     def setup(self):
         TIEMPO_REGISTRY.clear()
@@ -24,27 +23,31 @@ class RunnerTests(TestCase):
         reactor.run()
 
     def test_action_time_is_datetime(self):
-        self.assertIsInstance(self.runner.action_time, datetime.datetime)
+        runner = Runner(0, [1])
+        self.assertIsInstance(runner.action_time, datetime.datetime)
 
     def test_runner_is_busy(self):
+        runner = Runner(0, [1])
+        self.assertEqual(runner.cycle(), 300)
         job = self.simple_job.soon()
-        result = self.runner.cycle()
+        result = runner.cycle()
         self.assertIsInstance(result, Deferred)
-        self.assertEqual(self.runner.cycle(), 500)
-        self.assertEqual(self.runner.cycle(), 500)
-        result.addCallback(self.runner.cleanup)
-        self.runner.run()
+        self.assertEqual(runner.cycle(), 500)
+        self.assertEqual(runner.cycle(), 500)
+        result.addCallback(runner.cleanup)
+        runner.run()
         return
 
     def test_runner_cleanup(self):
         def check(result):
-            self.assertEqual(self.runner.currenct_job, None)
-            self.assertEqual(self.runner.start_time, None)
-            self.assertEqual(self.runner.finish_time, None)
-            self.assertEqual(self.runner.error_state, False)
+            self.assertEqual(runner.currenct_job, None)
+            self.assertEqual(runner.start_time, None)
+            self.assertEqual(runner.finish_time, None)
+            self.assertEqual(runner.error_state, False)
+        runner = Runner(1, [1])
         job =self.simple_job.soon()
-        result = self.runner.cycle()
+        result = runner.cycle()
         self.assertIsInstance(result, Deferred)
-        result.addCallbacks(self.runner.cleanup)
+        result.addCallbacks(runner.cleanup)
         result.addCallback(check)
         return
