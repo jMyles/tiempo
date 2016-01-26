@@ -1,12 +1,9 @@
 language: python
+install:
+  - pip install tox-travis
+  - pip install pyflakes
 services:
   - redis-server
-# Caution - no way to invalidate this.  If we remove a dep, we might need to run a build with this block commented out.  Additionally, it seems that the python version needs to be ticked each time Travis upgrades. This is the price we pay for Travis caching.
-#cache:
-# directories:
-#   - ~/virtualenv
-#   - ~/miniconda
-#   - ~/.cache/pip/
 notifications:
   email:
     recipients:
@@ -20,3 +17,12 @@ before_install:
 script: coverage run --source tiempo runtests.py
 after_success:
   - codecov
+
+# The following breaks the deployment of code. As it causes the tox script to not be installed. It's an optimization that would save us a total of 3mins if it worked...
+# Caution - no way to invalidate this.  If we remove a dep, we might need to run a build with this block commented out.
+# cache:
+  # directories:
+    # - /home/travis/virtualenv/python2.7/bin
+    # - /home/travis/virtualenv/python2.7/lib/python2.7/site-packages
+    # - /home/travis/miniconda/lib/python2.7/site-packages
+    # - /home/travis/.cache/pip/
