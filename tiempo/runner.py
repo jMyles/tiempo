@@ -9,6 +9,7 @@ from tiempo.conn import REDIS
 from tiempo.utils import utc_now, namespace
 from tiempo.work import Job
 from tiempo import RUNNERS
+from twisted.python.failure import Failure
 from twisted.logger import Logger
 logger = Logger()
 import traceback
@@ -201,12 +202,15 @@ class Runner(object):
             if self in runner_list:
                 runner_list.remove(self)
 
-def cleanup(runner):
+def cleanup(runner, *args, **kwargs):
     """
     A callback for runner management.
 
     Creates a new runner and shutsdown the old one.
     """
+    if isinstance(runner, Failure):
+        logger.info("%s failed" % runner, *args, **kwargs)
+        return
     number = runner.number
     task_groups = runner.task_groups
     new_runner = Runner(number, task_groups)

@@ -294,3 +294,9 @@ class TaskScheduleTests(TestCase):
                 seconds_from_now_task_should_run, task_hours, check_hours,)
             )
 
+    def test_check_schedule(self):
+        decorated = Trabajo(force_interval=True)(some_callable)
+        schedule = decorated.check_schedule()
+        self.assertIsInstance(schedule, list)
+        item = schedule.pop()
+        self.assertIsInstance(item, datetime)
