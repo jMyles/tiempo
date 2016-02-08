@@ -216,3 +216,8 @@ def cleanup(runner, *args, **kwargs):
     new_runner = Runner(number, task_groups)
     runner.shut_down
     return new_runner
+
+def cleanup_errors(failure, runner):
+    logger.error(failure)
+    return cleanup(runner)
+
