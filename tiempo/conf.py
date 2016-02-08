@@ -39,6 +39,6 @@ else:
     REDIS_TEST_DB = os.environ.get('TIEMPO_REDIS_TEST_DB', 13)
     REDIS_PW = os.environ.get('TIEMPO_REDIS_PW', None)
     SCHEDULE_AHEAD_MINUTES = os.environ.get('SCHEDULE_AHEAD_MINUTES', 180)
-    MAX_SCHEDULE_AHEAD_JOBS = os.environ.get('MAX_SCHEDULE_AHEAD_JOBS', 100)
+    MAX_SCHEDULE_AHEAD_JOBS = os.environ.get('MAX_SCHEDULE_AHEAD_JOBS', 10)
 
 TASK_PATHS = json.loads(os.environ.get('TIEMPO_TASK_PATHS', '["tiempo.demo"]'))

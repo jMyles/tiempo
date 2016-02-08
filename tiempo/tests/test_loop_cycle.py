@@ -88,7 +88,7 @@ class ScheduleExpiryTests(TestCase):
         orig_times = [int(key.split(':')[-1]) for key in queued]
         orig_times.sort()
 
-        self.assertEqual(len(queued), 100)
+        self.assertEqual(len(queued), 10)
 
         # wait 1 second so... any time values that would be generated
         # on subsequent scheduling iterations would be different
@@ -103,7 +103,7 @@ class ScheduleExpiryTests(TestCase):
         times.sort()
 
         # there should be no new tasks scheduled
-        self.assertEqual(len(queued), 100)
+        self.assertEqual(len(queued), 10)
 
         # the keys should NOT still be the same because we have waited for a
         # scheduled key to expire and re-run the `schedule_tasks_for_queueing`

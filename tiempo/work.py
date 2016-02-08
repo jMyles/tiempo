@@ -441,16 +441,6 @@ class Trabajo(object):
             for key, val in data.items():
                 setattr(self, key, val)
 
-    def is_planned(self):
-        '''
-        TODO: Account for dependent tasks and tasks that have recently
-        had their 'soon()' method called.
-        '''
-        if not self.force_interval and not self.periodic:
-            return False
-        else:
-            return True
-
     def get_schedule(self):
         if self.periodic:
             sched = [
@@ -467,36 +457,93 @@ class Trabajo(object):
 
             return '.'.join(sched)
 
+    def check_schedule(self, window_begin=None, window_end=None):
+        '''
+        Takes a datetime, window_begin, which defaults to utc_now() without microseconds.
+        Takes a datetime, window_end, which default to one hour after dt.
+
+        Checks to see if this task can be enqueued at 1 or more times
+        between window_begin and window_end.
+
+        Returns a list of datetime objects at which scheduling this task is appropriate.
+        '''
+
+        if window_begin:
+            window_begin.replace(microsecond=0)
+        else:
+            window_begin= utc_now().replace(microsecond=0)
+
+        window_end = window_end or window_begin + datetime.timedelta(minutes=SCHEDULE_AHEAD_MINUTES)
+
+        return self.get_times_for_window(window_begin, window_end)
+
+    def get_times_for_window(self, start, end, max_times=None):
+
+        cutoff = max_times or self.max_schedule_ahead or MAX_SCHEDULE_AHEAD_JOBS
+
+        out = []
+        next_time = last_time = self.datetime_of_subsequent_run(start)
+
+        offset = relativedelta()
+        if not self.force_interval:
+            # getting the next run with a datetime that matches
+            # the next run will return the same value
+            # so we need to bump it up by our smallest interval which
+            # is currenly one minute
+            offset = relativedelta(minutes=1)
+        while next_time and next_time > start and next_time < end and len(out) < cutoff:
+            out.append(next_time)
+            next_time = self.datetime_of_subsequent_run(next_time + offset)
+            if next_time == last_time:
+                break
+            last_time = next_time
+
+        return out
+
+    def datetime_of_subsequent_run(self, dt=None):
+        """
+        Takes a datetime, which defaults to utc_now().
+
+        If this task is currently planned, returns the first time
+        after dt when this task is eligible to be run.
+
+        Otherwise, returns None.
+        """
+        dt = dt or utc_now().replace(microsecond=0)
+        r = self.delta_until_run_time(dt)
+        if r is not None:
+            return (dt + r).replace(microsecond=0)
+
     def delta_until_run_time(self, dt=None):
         '''
         Takes a datetime, which defaults to utc_now().
 
-        If this task is currently planned, returns a relativedelta from dt when it is eligible to be queued.
+        If this task is currently planned,
+        returns a relativedelta from dt when it is eligible to be queued.
 
-        (e.g., if it's 3:51, and this Trabajo runs every hour at 20 after the hour, then this function will return relativedelta(hours=+1, minute=20), the duration from now until 4:20)
+        (e.g., if it's 3:51, and this Trabajo runs every hour at 20
+        after the hour, then this function will return
+        relativedelta(hours=+1, minute=20), the duration from now until 4:20)
 
         If not planned, returns None.
 
-        TODO: If task is currently enqueued, return some kind of ENQUEUED object.
+        TODO:If task is currently enqueued, return some kind of ENQUEUED object.
         '''
         dt = dt or utc_now()
 
-        if self.is_planned():
+        if self.force_interval or self.periodic:
 
             if self.force_interval:
-                seconds = self.force_interval
-                last_run = REDIS.get(namespace("last_run:%s" % self.uid))
-                if not last_run:  # If we've never run before...
-                    return datetime.timedelta(seconds=seconds)
-                else:
-                    #  i would think we would
-                    #  add the interval time to
-                    #  the last run time here?
-                    raise RuntimeError("Not implemented.")
+                try:
+                    last_run = check_last_run(self.uid, self.force_interval)
+                    return last_run
+                except RuntimeError:
+                    return
 
             # create a delta by getting the difference between
             # now and the next time this tasks should run
             return self.get_next_time_for_periodic_task(dt) - dt
+
 
     def get_next_time_for_periodic_task(self, search_start_time):
         """
@@ -570,62 +617,6 @@ class Trabajo(object):
 
         return next_time
 
-    def datetime_of_subsequent_run(self, dt=None):
-        """
-        Takes a datetime, which defaults to utc_now().
-
-        If this task is currently planned, returns the first time
-        after dt when this task is eligible to be run.
-
-        Otherwise, returns None.
-        """
-        dt = dt or utc_now().replace(microsecond=0)
-        r = self.delta_until_run_time(dt)
-        if r is not None:
-            return (dt + r).replace(microsecond=0)
-
-    def check_schedule(self, window_begin=None, window_end=None):
-        '''
-        Takes a datetime, window_begin, which defaults to utc_now() without microseconds.
-        Takes a datetime, window_end, which default to one hour after dt.
-
-        Checks to see if this task can be enqueued at 1 or more times
-        between window_begin and window_end.
-
-        Returns a list of datetime objects at which scheduling this task is appropriate.
-        '''
-
-        if window_begin:
-            window_begin.replace(microsecond=0)
-        else:
-            window_begin= utc_now().replace(microsecond=0)
-
-        window_end = window_end or window_begin + datetime.timedelta(minutes=SCHEDULE_AHEAD_MINUTES)
-
-        return self.get_times_for_window(window_begin, window_end)
-
-    def get_times_for_window(self, start, end, max_times=None):
-
-        cutoff = max_times or self.max_schedule_ahead or MAX_SCHEDULE_AHEAD_JOBS
-
-        out = []
-        next_time = last_time = self.datetime_of_subsequent_run(start)
-
-        offset = relativedelta()
-        if not self.force_interval:
-            # getting the next run with a datetime that matches
-            # the next run will return the same value
-            # so we need to bump it up by our smallest interval which
-            # is currenly one minute
-            offset = relativedelta(minutes=1)
-        while next_time and next_time > start and next_time < end and len(out) < cutoff:
-            out.append(next_time)
-            next_time = self.datetime_of_subsequent_run(next_time + offset)
-            if next_time == last_time:
-                break
-            last_time = next_time
-
-        return out
 
     def currently_scheduled_keys(self):
         '''
@@ -704,6 +695,40 @@ class Trabajo(object):
         # TODO: Issue deprecation warning.
         result = self.spawn_job_and_run_now(*args, **kwargs)
         return result
+
+
+#def spawn_generator(start, end, max_times=None, **kwargs):
+#    """
+#    Returns a schedule generator
+#    """
+#    runtimes = 0
+#
+#    def schedule_generator(start, end, max_times=None,
+#            force_interval=False, **kwargs):
+#        """
+#        A generator that returns datetime objects in the future.
+#        """
+#        cutoff = max_times or MAX_SCHEDULE_AHEAD_JOBS
+#        if runtimes == cutoff:
+#            return
+#        next_time = datetime_of_subsequent_run(start)
+#        offset = relativedelta()
+#        if not force_interval:
+#            offset = relativedelta(minutes=1)
+#        next_time = datetime_of_subsequent_run(next_time + offset)
+#        yield next_time
+
+def check_last_run(uid, force_interval=0):
+    """
+    checks for a last run time for a task
+    """
+    seconds = force_interval
+    last_run = REDIS.get(namespace("last_run:%s" % uid))
+    if not last_run:
+        return datetime.timedelta(seconds=seconds)
+    else:
+        raise RuntimeError("Not implemented")
+
 
 
 task = Trabajo  # For compatibility as a drop-in Celery replacement.

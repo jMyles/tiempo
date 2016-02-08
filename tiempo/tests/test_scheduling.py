@@ -112,11 +112,13 @@ class TaskScheduleTests(TestCase):
 
     def test_unscheduled_task_is_unplanned(self):
         unscheduled_task = unplanned_task(some_callable)
-        self.assertFalse(unscheduled_task.is_planned())
+        boolean = unscheduled_task.force_interval or unscheduled_task.periodic
+        self.assertFalse(boolean)
 
     def test_scheduled_task_is_planned(self):
         minutely = minutely_task(some_callable)
-        self.assertTrue(minutely.is_planned())
+        boolean = minutely.force_interval or minutely.periodic
+        self.assertTrue(boolean)
 
     def test_minutely_task_runs_next_minute(self):
         task = minutely_task(some_callable)
@@ -300,3 +302,4 @@ class TaskScheduleTests(TestCase):
         self.assertIsInstance(schedule, list)
         item = schedule.pop()
         self.assertIsInstance(item, datetime)
+        print schedule
