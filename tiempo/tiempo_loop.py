@@ -82,7 +82,20 @@ def queue_scheduled_tasks(backend_events):
     return
 
 def schedule_tasks_for_queueing():
+    """
+    Takes no arguments. Schedules runtimes and adds them to redis.
 
+    Creates a redis pipeline.
+    Runs Trabajo.check_schedule to check the scheduling
+    and do various hanky-panky with datetime objects.
+    Iterates over both the tasks in TIEMPO_REGISTRY
+    and all of the run times of a particular task.
+    For a particular run time of a particular task,
+    sets that tasks value to zero, and sets an
+    expire time. Sets a lattermost run time,
+    aqcuires a lock, and executes all of the
+    commands in the pipe.
+    """
     pipe = REDIS.pipeline()
     for task in TIEMPO_REGISTRY.values():
         # TODO: Does this belong in Trabajo?  With pipe as an optional argument?

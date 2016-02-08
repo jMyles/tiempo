@@ -425,13 +425,13 @@ class Trabajo(object):
 
     def _thaw(self, data=None):
         """
-            If this is called it is after a task has been instantiated by
-            a worker process after being pulled as serialized data from redis
-            and decoded.
+        If this is called it is after a task has been instantiated by
+        a worker process after being pulled as serialized data from redis
+        and decoded.
 
-            the for loop where the attrs are set from the data dict
-            will set this task to the same state as if it was
-            __init__ed as a decorator
+        the for loop where the attrs are set from the data dict
+        will set this task to the same state as if it was
+        __init__ed as a decorator
         """
 
         if not data and hasattr(self, 'data'):
@@ -459,13 +459,15 @@ class Trabajo(object):
 
     def check_schedule(self, window_begin=None, window_end=None):
         '''
-        Takes a datetime, window_begin, which defaults to utc_now() without microseconds.
+        Takes a datetime, window_begin, which defaults to utc_now()
+        without microseconds.
         Takes a datetime, window_end, which default to one hour after dt.
 
         Checks to see if this task can be enqueued at 1 or more times
         between window_begin and window_end.
 
-        Returns a list of datetime objects at which scheduling this task is appropriate.
+        Returns a list of datetime objects at which scheduling
+        this task is appropriate.
         '''
 
         if window_begin:
@@ -525,7 +527,7 @@ class Trabajo(object):
         after the hour, then this function will return
         relativedelta(hours=+1, minute=20), the duration from now until 4:20)
 
-        If not planned, returns None.
+        If not force_interval or periodic, returns None.
 
         TODO:If task is currently enqueued, return some kind of ENQUEUED object.
         '''
@@ -653,7 +655,8 @@ class Trabajo(object):
                   *args,
                   **kwargs):
         '''
-        Create a Job object for this task and push it to the queue with args and kwargs.
+        Create a Job object for this task and push it to the queue
+        with args and kwargs.
         '''
         job = self.just_spawn_job(default_report_handler)
         job.soon(job_list=namespace(job_list), *args, **kwargs)
@@ -661,14 +664,14 @@ class Trabajo(object):
         # Now we generate a new code word for next time.
         self.generate_code_word()
 
-        logger.info("Spawned job %s (%s) for %s (%s).  Code word next time: %s" % (
-                        job.code_word,
-                        job.uid,
-                        self.key,
-                        self.uid,
-                        self.code_word
-                        )
-                    )
+        logger.info("""Spawned job %s (%s) for %s (%s).
+        Code word next time: %s""" % (
+            job.code_word,
+            job.uid,
+            self.key,
+            self.uid,
+            self.code_word
+            ))
 
         return job
 
@@ -684,7 +687,8 @@ class Trabajo(object):
         Also takes argument "tiempo_wait_for" for backward compat.
         '''
 
-        # If we are told to wait for another task, we'll put this in the appropriately named queue.
+        # If we are told to wait for another task,
+        #we'll put this in the appropriately named queue.
         self.spawn_job_and_run_soon(job_list=tiempo_wait_for, *args, **kwargs)
         return self
 
