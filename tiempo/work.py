@@ -734,5 +734,4 @@ def check_last_run(uid, force_interval=0):
         raise RuntimeError("Not implemented")
 
 
-
 task = Trabajo  # For compatibility as a drop-in Celery replacement.

@@ -71,14 +71,15 @@ def let_runners_pick_up_queued_tasks():
 
 def queue_scheduled_tasks(backend_events):
     """
-    Takes a list. Iterates over the events in the list. If they are both scheduled and expired,
+    Takes a list. Iterates over the events in the list.
+    If they are both scheduled and expired,
     calls task.spawn_job_and_run_soon.
     """
     # TODO: What happens if this is running on the same machine?
     run_now = queue_expired_tasks(backend_events)
 
     # We now know which jobs need to be run.  Run them if marked.
-    queued_jobs = queue_jobs(run_now)
+    queue_jobs(run_now)
     return
 
 def schedule_tasks_for_queueing():
@@ -86,30 +87,30 @@ def schedule_tasks_for_queueing():
     Takes no arguments. Schedules runtimes and adds them to redis.
 
     Creates a redis pipeline.
-    Runs Trabajo.check_schedule to check the scheduling
-    and do various hanky-panky with datetime objects.
-    Iterates over both the tasks in TIEMPO_REGISTRY
+    Runs Trabajo.check_schedule to check the scheduling.
+    Iterates over all tasks in TIEMPO_REGISTRY
     and all of the run times of a particular task.
     For a particular run time of a particular task,
     sets that tasks value to zero, and sets an
     expire time. Sets a lattermost run time,
-    aqcuires a lock, and executes all of the
+    acquires a lock, and executes all of the
     commands in the pipe.
     """
     pipe = REDIS.pipeline()
-    for task in TIEMPO_REGISTRY.values():
+    for trabajo in TIEMPO_REGISTRY.values():
         # TODO: Does this belong in Trabajo?  With pipe as an optional argument?
-        run_times = task.check_schedule()
+        run_times = trabajo.check_schedule()
 
         for run_time in run_times:
-            # TODO: There's probably a better namespace for this - maybe a UUID to assigned to the job that eventually gets spawned.
+            # TODO: There's probably a better namespace for this 
+            #maybe a UUID to assigned to the job that eventually gets spawned.
             unix_time = calendar.timegm(run_time.timetuple())
-            key = namespace('scheduled:%s:%s' % (task.key, unix_time))
+            key = namespace('scheduled:%s:%s' % (trabajo.key, unix_time))
             pipe.set(key, 0)
             pipe.expireat(key, unix_time)
         if run_times:
             # After loop, set final time.
-            pipe.set(namespace('lattermost_run_time:%s' % task.key), run_time.isoformat())
+            pipe.set(namespace('lattermost_run_time:%s' % trabajo.key), run_time.isoformat())
     if schedule_lock.acquire():
         pipe.execute()
     schedule_lock.release()
@@ -124,7 +125,8 @@ def broadcast_new_announcements_to_listeners(events):
             new_value = REDIS.hgetall(key)
             channel_to_announce = key.split(':', 1)[0]
             if new_value.has_key('jobUid'):
-                hxdispatcher.send(channel_to_announce, {channel_to_announce: {new_value['jobUid']: new_value}})
+                hxdispatcher.send(channel_to_announce,
+                    {channel_to_announce: {new_value['jobUid']: new_value}})
             else:
                 hxdispatcher.send(channel_to_announce, {channel_to_announce: new_value})
 
