@@ -493,6 +493,9 @@ class Trabajo(object):
             # so we need to bump it up by our smallest interval which
             # is currenly one minute
             offset = relativedelta(minutes=1)
+        if self.force_interval:
+            if REDIS.get(namespace("lattermost_run_time:%s" % self.key)) != None:
+                return out
         while next_time and next_time > start and next_time < end and len(out) < cutoff:
             out.append(next_time)
             next_time = self.datetime_of_subsequent_run(next_time + offset)
@@ -536,11 +539,7 @@ class Trabajo(object):
         if self.force_interval or self.periodic:
 
             if self.force_interval:
-                try:
-                    last_run = check_last_run(self.uid, self.force_interval)
-                    return last_run
-                except RuntimeError:
-                    return
+                return datetime.timedelta(seconds=self.force_interval)
 
             # create a delta by getting the difference between
             # now and the next time this tasks should run
@@ -699,39 +698,6 @@ class Trabajo(object):
         # TODO: Issue deprecation warning.
         result = self.spawn_job_and_run_now(*args, **kwargs)
         return result
-
-
-#def spawn_generator(start, end, max_times=None, **kwargs):
-#    """
-#    Returns a schedule generator
-#    """
-#    runtimes = 0
-#
-#    def schedule_generator(start, end, max_times=None,
-#            force_interval=False, **kwargs):
-#        """
-#        A generator that returns datetime objects in the future.
-#        """
-#        cutoff = max_times or MAX_SCHEDULE_AHEAD_JOBS
-#        if runtimes == cutoff:
-#            return
-#        next_time = datetime_of_subsequent_run(start)
-#        offset = relativedelta()
-#        if not force_interval:
-#            offset = relativedelta(minutes=1)
-#        next_time = datetime_of_subsequent_run(next_time + offset)
-#        yield next_time
-
-def check_last_run(uid, force_interval=0):
-    """
-    checks for a last run time for a task
-    """
-    seconds = force_interval
-    last_run = REDIS.get(namespace("last_run:%s" % uid))
-    if not last_run:
-        return datetime.timedelta(seconds=seconds)
-    else:
-        raise RuntimeError("Not implemented")
 
 
 task = Trabajo  # For compatibility as a drop-in Celery replacement.

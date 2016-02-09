@@ -302,4 +302,3 @@ class TaskScheduleTests(TestCase):
         self.assertIsInstance(schedule, list)
         item = schedule.pop()
         self.assertIsInstance(item, datetime)
-        print schedule
