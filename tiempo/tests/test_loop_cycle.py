@@ -3,6 +3,7 @@ import string
 import random
 import time
 import datetime
+import unittest
 from collections import deque
 
 from twisted.internet import task
@@ -49,6 +50,7 @@ class WholeCycleTests(TestCase):
         events = glean_events_from_backend()
         self.assertIsInstance(events, deque)
 
+    @unittest.skip("test not implemented")
     def test_whole_cycle(self):
         self.fail()
 
