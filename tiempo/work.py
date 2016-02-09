@@ -22,7 +22,7 @@ except ImportError:
 from . import TIEMPO_REGISTRY
 
 from .conn import REDIS
-
+import pytz
 import inspect
 import uuid
 import importlib
@@ -494,8 +494,13 @@ class Trabajo(object):
             # is currenly one minute
             offset = relativedelta(minutes=1)
         if self.force_interval:
-            if REDIS.get(namespace("lattermost_run_time:%s" % self.key)) != None:
-                return out
+            last_time = REDIS.get(namespace("lattermost_run_time:%s" % self.key))
+            if last_time != None:
+                utc = pytz.UTC
+                date_object = datetime.datetime.strptime(last_time, "%Y-%m-%dT%H:%M:%S+00:00")
+                last_time = utc.localize(dt=date_object)
+                if last_time <= utc_now():
+                    return out
         while next_time and next_time > start and next_time < end and len(out) < cutoff:
             out.append(next_time)
             next_time = self.datetime_of_subsequent_run(next_time + offset)

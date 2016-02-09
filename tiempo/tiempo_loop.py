@@ -118,7 +118,10 @@ def schedule_tasks_for_queueing():
 
 def broadcast_new_announcements_to_listeners(events):
 
-    event = events.popleft()
+    try:
+        event = events.popleft()
+    except IndexError:
+        return
     if not event['type'] == 'psubscribe':
         key = event['channel'].split(':', 1)[1]
         if key == "expired":
