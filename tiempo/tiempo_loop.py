@@ -37,7 +37,7 @@ def cycle():
     # Thing 3) Queue up new tasks.
     queue_scheduled_tasks(events)
     # Thing 4) Schedule new tasks for enqueing.
-    schedule_tasks_for_queueing()
+    #schedule_tasks_for_queueing()
     # Thing 5) Broadcast any new announcements to listeners.
     broadcast_new_announcements_to_listeners(events)
 
@@ -118,18 +118,18 @@ def schedule_tasks_for_queueing():
 
 def broadcast_new_announcements_to_listeners(events):
 
-    for event in events:
-        if not event['type'] == 'psubscribe':
-            key = event['channel'].split(':', 1)[1]
-            if key == "expired":
-                continue # We aren't handling expired notifications here.
-            new_value = REDIS.hgetall(key)
-            channel_to_announce = key.split(':', 1)[0]
-            if new_value.has_key('jobUid'):
-                hxdispatcher.send(channel_to_announce,
-                    {channel_to_announce: {new_value['jobUid']: new_value}})
-            else:
-                hxdispatcher.send(channel_to_announce, {channel_to_announce: new_value})
+    event = events.popleft()
+    if not event['type'] == 'psubscribe':
+        key = event['channel'].split(':', 1)[1]
+        if key == "expired":
+            return
+        new_value = REDIS.hgetall(key)
+        channel_to_announce = key.split(':', 1)[0]
+        if new_value.has_key('jobUid'):
+            hxdispatcher.send(channel_to_announce,
+                {channel_to_announce: {new_value['jobUid']: new_value}})
+        else:
+            hxdispatcher.send(channel_to_announce, {channel_to_announce: new_value})
 
 
 def start():
@@ -141,5 +141,6 @@ def start():
     if not looper.running:
         looper.start(1)  # TODO: Customize interval
         task.LoopingCall(announce_tasks_to_client).start(5)
+        task.LoopingCall(schedule_tasks_for_queueing).start(30)
     else:
         logger.warning("Tried to call tiempo_loop start() while the loop is already running.")

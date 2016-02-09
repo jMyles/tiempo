@@ -24,7 +24,7 @@ def create_event_queue():
     """
     Returns a closure that updates and returns the events queue
     """
-    events = deque([])
+    events = deque([], maxlen=40)
     def update_event_queue():
         """
         A function that updates the events queue and returns it
