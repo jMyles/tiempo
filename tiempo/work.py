@@ -22,7 +22,7 @@ except ImportError:
 from . import TIEMPO_REGISTRY
 
 from .conn import REDIS
-
+import pytz
 import inspect
 import uuid
 import importlib
@@ -425,13 +425,13 @@ class Trabajo(object):
 
     def _thaw(self, data=None):
         """
-            If this is called it is after a task has been instantiated by
-            a worker process after being pulled as serialized data from redis
-            and decoded.
+        If this is called it is after a task has been instantiated by
+        a worker process after being pulled as serialized data from redis
+        and decoded.
 
-            the for loop where the attrs are set from the data dict
-            will set this task to the same state as if it was
-            __init__ed as a decorator
+        the for loop where the attrs are set from the data dict
+        will set this task to the same state as if it was
+        __init__ed as a decorator
         """
 
         if not data and hasattr(self, 'data'):
@@ -440,16 +440,6 @@ class Trabajo(object):
         if data:
             for key, val in data.items():
                 setattr(self, key, val)
-
-    def is_planned(self):
-        '''
-        TODO: Account for dependent tasks and tasks that have recently
-        had their 'soon()' method called.
-        '''
-        if not self.force_interval and not self.periodic:
-            return False
-        else:
-            return True
 
     def get_schedule(self):
         if self.periodic:
@@ -467,36 +457,123 @@ class Trabajo(object):
 
             return '.'.join(sched)
 
+    def check_schedule(self, window_begin=None, window_end=None):
+        '''
+        Takes a datetime, window_begin, which defaults to utc_now()
+        without microseconds.
+        Takes a datetime, window_end, which default to one hour after dt.
+
+        Checks to see if this task can be enqueued at 1 or more times
+        between window_begin and window_end.
+
+        Returns a list of datetime objects at which scheduling
+        this task is appropriate.
+        '''
+
+        if window_begin:
+            window_begin.replace(microsecond=0)
+        else:
+            window_begin= utc_now().replace(microsecond=0)
+
+        window_end = window_end or window_begin + datetime.timedelta(minutes=SCHEDULE_AHEAD_MINUTES)
+
+        return self.get_times_for_window(window_begin, window_end)
+
+    def get_times_for_window(self, start, end):
+        """
+        This method is basically a disaster area.
+
+        Returns a list of datetime objects.
+        In all cases except force_interval == int
+        returns a reasonable list.
+
+        It used to return lists of approximately 27 datetime objects
+        if force_interval was some number. I've hard coded 13 as
+        an upper limit for the number of datetime objects returned.
+
+        James T Farrington 2/9/2016
+        """
+        cutoff = self.max_schedule_ahead or MAX_SCHEDULE_AHEAD_JOBS
+
+        out = []
+        next_time = last_time = self.datetime_of_subsequent_run(start)
+
+        offset = relativedelta()
+        if not self.force_interval:
+            # getting the next run with a datetime that matches
+            # the next run will return the same value
+            # so we need to bump it up by our smallest interval which
+            # is currenly one minute
+            offset = relativedelta(minutes=1)
+        run_time = self.check_last_run_time()
+        if run_time != None:
+            return run_time
+        while len(out) < cutoff:
+            if next_time and next_time > start and next_time < end:
+                out.append(next_time)
+                next_time = self.datetime_of_subsequent_run(next_time + offset)
+            if next_time == last_time:
+                break
+            last_time = next_time
+
+        if self.force_interval:
+            try:
+                output = out[:13]
+                return output
+            except IndexError:
+                return out
+        return out
+
+    def check_last_run_time(self):
+        if self.force_interval:
+            last_time = REDIS.get(namespace("last_run_time:%s" % self.key))
+            if last_time != None:
+                utc = pytz.UTC
+                date_object = datetime.datetime.strptime(last_time, "%Y-%m-%dT%H:%M:%S+00:00")
+                last_time = utc.localize(dt=date_object)
+                if last_time <= utc_now():
+                    return []
+
+    def datetime_of_subsequent_run(self, dt=None):
+        """
+        Takes a datetime, which defaults to utc_now().
+
+        If this task is currently planned, returns the first time
+        after dt when this task is eligible to be run.
+
+        Otherwise, returns None.
+        """
+        dt = dt or utc_now().replace(microsecond=0)
+        r = self.delta_until_run_time(dt)
+        if r is not None:
+            return (dt + r).replace(microsecond=0)
+
     def delta_until_run_time(self, dt=None):
         '''
         Takes a datetime, which defaults to utc_now().
 
-        If this task is currently planned, returns a relativedelta from dt when it is eligible to be queued.
+        If this task is currently planned,
+        returns a relativedelta from dt when it is eligible to be queued.
 
-        (e.g., if it's 3:51, and this Trabajo runs every hour at 20 after the hour, then this function will return relativedelta(hours=+1, minute=20), the duration from now until 4:20)
+        (e.g., if it's 3:51, and this Trabajo runs every hour at 20
+        after the hour, then this function will return
+        relativedelta(hours=+1, minute=20), the duration from now until 4:20)
 
-        If not planned, returns None.
+        If not force_interval or periodic, returns None.
 
-        TODO: If task is currently enqueued, return some kind of ENQUEUED object.
+        TODO:If task is currently enqueued, return some kind of ENQUEUED object.
         '''
         dt = dt or utc_now()
 
-        if self.is_planned():
+        if self.force_interval or self.periodic:
 
             if self.force_interval:
-                seconds = self.force_interval
-                last_run = REDIS.get(namespace("last_run:%s" % self.uid))
-                if not last_run:  # If we've never run before...
-                    return datetime.timedelta(seconds=seconds)
-                else:
-                    #  i would think we would
-                    #  add the interval time to
-                    #  the last run time here?
-                    raise RuntimeError("Not implemented.")
+                return datetime.timedelta(seconds=self.force_interval)
 
             # create a delta by getting the difference between
             # now and the next time this tasks should run
             return self.get_next_time_for_periodic_task(dt) - dt
+
 
     def get_next_time_for_periodic_task(self, search_start_time):
         """
@@ -570,62 +647,6 @@ class Trabajo(object):
 
         return next_time
 
-    def datetime_of_subsequent_run(self, dt=None):
-        """
-        Takes a datetime, which defaults to utc_now().
-
-        If this task is currently planned, returns the first time
-        after dt when this task is eligible to be run.
-
-        Otherwise, returns None.
-        """
-        dt = dt or utc_now().replace(microsecond=0)
-        r = self.delta_until_run_time(dt)
-        if r is not None:
-            return (dt + r).replace(microsecond=0)
-
-    def check_schedule(self, window_begin=None, window_end=None):
-        '''
-        Takes a datetime, window_begin, which defaults to utc_now() without microseconds.
-        Takes a datetime, window_end, which default to one hour after dt.
-
-        Checks to see if this task can be enqueued at 1 or more times
-        between window_begin and window_end.
-
-        Returns a list of datetime objects at which scheduling this task is appropriate.
-        '''
-
-        if window_begin:
-            window_begin.replace(microsecond=0)
-        else:
-            window_begin= utc_now().replace(microsecond=0)
-
-        window_end = window_end or window_begin + datetime.timedelta(minutes=SCHEDULE_AHEAD_MINUTES)
-
-        return self.get_times_for_window(window_begin, window_end)
-
-    def get_times_for_window(self, start, end, max_times=None):
-
-        cutoff = max_times or self.max_schedule_ahead or MAX_SCHEDULE_AHEAD_JOBS
-
-        out = []
-        next_time = last_time = self.datetime_of_subsequent_run(start)
-
-        offset = relativedelta()
-        if not self.force_interval:
-            # getting the next run with a datetime that matches
-            # the next run will return the same value
-            # so we need to bump it up by our smallest interval which
-            # is currenly one minute
-            offset = relativedelta(minutes=1)
-        while next_time and next_time > start and next_time < end and len(out) < cutoff:
-            out.append(next_time)
-            next_time = self.datetime_of_subsequent_run(next_time + offset)
-            if next_time == last_time:
-                break
-            last_time = next_time
-
-        return out
 
     def currently_scheduled_keys(self):
         '''
@@ -662,7 +683,8 @@ class Trabajo(object):
                   *args,
                   **kwargs):
         '''
-        Create a Job object for this task and push it to the queue with args and kwargs.
+        Create a Job object for this task and push it to the queue
+        with args and kwargs.
         '''
         job = self.just_spawn_job(default_report_handler)
         job.soon(job_list=namespace(job_list), *args, **kwargs)
@@ -670,14 +692,14 @@ class Trabajo(object):
         # Now we generate a new code word for next time.
         self.generate_code_word()
 
-        logger.info("Spawned job %s (%s) for %s (%s).  Code word next time: %s" % (
-                        job.code_word,
-                        job.uid,
-                        self.key,
-                        self.uid,
-                        self.code_word
-                        )
-                    )
+        logger.info("""Spawned job %s (%s) for %s (%s).
+        Code word next time: %s""" % (
+            job.code_word,
+            job.uid,
+            self.key,
+            self.uid,
+            self.code_word
+            ))
 
         return job
 
@@ -693,7 +715,8 @@ class Trabajo(object):
         Also takes argument "tiempo_wait_for" for backward compat.
         '''
 
-        # If we are told to wait for another task, we'll put this in the appropriately named queue.
+        # If we are told to wait for another task,
+        #we'll put this in the appropriately named queue.
         self.spawn_job_and_run_soon(job_list=tiempo_wait_for, *args, **kwargs)
         return self
 

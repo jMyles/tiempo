@@ -21,7 +21,7 @@ class ScheduleBackendTests(TestCase):
         REDIS.flushall()
 
     def test_force_interval_gets_job_scheduled_on_first_cycle(self):
-        schedule_ahead = 50
+        schedule_ahead = 12
         decorated = Trabajo(force_interval=3, max_schedule_ahead=schedule_ahead)(some_callable)
 
         # Now do the scheduling.
@@ -112,11 +112,13 @@ class TaskScheduleTests(TestCase):
 
     def test_unscheduled_task_is_unplanned(self):
         unscheduled_task = unplanned_task(some_callable)
-        self.assertFalse(unscheduled_task.is_planned())
+        boolean = unscheduled_task.force_interval or unscheduled_task.periodic
+        self.assertFalse(boolean)
 
     def test_scheduled_task_is_planned(self):
         minutely = minutely_task(some_callable)
-        self.assertTrue(minutely.is_planned())
+        boolean = minutely.force_interval or minutely.periodic
+        self.assertTrue(boolean)
 
     def test_minutely_task_runs_next_minute(self):
         task = minutely_task(some_callable)
@@ -294,3 +296,9 @@ class TaskScheduleTests(TestCase):
                 seconds_from_now_task_should_run, task_hours, check_hours,)
             )
 
+    def test_check_schedule(self):
+        decorated = Trabajo(force_interval=True)(some_callable)
+        schedule = decorated.check_schedule()
+        self.assertIsInstance(schedule, list)
+        item = schedule.pop()
+        self.assertIsInstance(item, datetime)
