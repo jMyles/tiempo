@@ -479,9 +479,21 @@ class Trabajo(object):
 
         return self.get_times_for_window(window_begin, window_end)
 
-    def get_times_for_window(self, start, end, max_times=None):
+    def get_times_for_window(self, start, end):
+        """
+        This method is basically a disaster area.
 
-        cutoff = max_times or self.max_schedule_ahead or MAX_SCHEDULE_AHEAD_JOBS
+        Returns a list of datetime objects.
+        In all cases except force_interval == int
+        returns a reasonable list.
+
+        It used to return lists of approximately 27 datetime objects
+        if force_interval was some number. I've hard coded 13 as
+        an upper limit for the number of datetime objects returned.
+
+        James T Farrington 2/9/2016
+        """
+        cutoff = self.max_schedule_ahead or MAX_SCHEDULE_AHEAD_JOBS
 
         out = []
         next_time = last_time = self.datetime_of_subsequent_run(start)
@@ -501,13 +513,20 @@ class Trabajo(object):
                 last_time = utc.localize(dt=date_object)
                 if last_time <= utc_now():
                     return out
-        while next_time and next_time > start and next_time < end and len(out) < cutoff:
-            out.append(next_time)
-            next_time = self.datetime_of_subsequent_run(next_time + offset)
+        while len(out) < cutoff:
+            if next_time and next_time > start and next_time < end:
+                out.append(next_time)
+                next_time = self.datetime_of_subsequent_run(next_time + offset)
             if next_time == last_time:
                 break
             last_time = next_time
 
+        if self.force_interval:
+            try:
+                output = out[:13]
+                return output
+            except IndexError:
+                return out
         return out
 
     def datetime_of_subsequent_run(self, dt=None):
