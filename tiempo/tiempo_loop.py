@@ -111,7 +111,7 @@ def schedule_tasks_for_queueing():
             pipe.expireat(key, unix_time)
         if run_times:
             # After loop, set final time.
-            pipe.set(namespace('lattermost_run_time:%s' % trabajo.key), run_time.isoformat())
+            pipe.set(namespace('last_run_time:%s' % trabajo.key), run_time.isoformat())
     if schedule_lock.acquire():
         pipe.execute()
     schedule_lock.release()

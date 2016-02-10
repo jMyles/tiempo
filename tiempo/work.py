@@ -505,14 +505,9 @@ class Trabajo(object):
             # so we need to bump it up by our smallest interval which
             # is currenly one minute
             offset = relativedelta(minutes=1)
-        if self.force_interval:
-            last_time = REDIS.get(namespace("lattermost_run_time:%s" % self.key))
-            if last_time != None:
-                utc = pytz.UTC
-                date_object = datetime.datetime.strptime(last_time, "%Y-%m-%dT%H:%M:%S+00:00")
-                last_time = utc.localize(dt=date_object)
-                if last_time <= utc_now():
-                    return out
+        run_time = self.check_last_run_time()
+        if run_time != None:
+            return run_time
         while len(out) < cutoff:
             if next_time and next_time > start and next_time < end:
                 out.append(next_time)
@@ -528,6 +523,16 @@ class Trabajo(object):
             except IndexError:
                 return out
         return out
+
+    def check_last_run_time(self):
+        if self.force_interval:
+            last_time = REDIS.get(namespace("last_run_time:%s" % self.key))
+            if last_time != None:
+                utc = pytz.UTC
+                date_object = datetime.datetime.strptime(last_time, "%Y-%m-%dT%H:%M:%S+00:00")
+                last_time = utc.localize(dt=date_object)
+                if last_time <= utc_now():
+                    return []
 
     def datetime_of_subsequent_run(self, dt=None):
         """

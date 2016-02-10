@@ -21,7 +21,7 @@ class ScheduleBackendTests(TestCase):
         REDIS.flushall()
 
     def test_force_interval_gets_job_scheduled_on_first_cycle(self):
-        schedule_ahead = 50
+        schedule_ahead = 12
         decorated = Trabajo(force_interval=3, max_schedule_ahead=schedule_ahead)(some_callable)
 
         # Now do the scheduling.
