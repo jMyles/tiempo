@@ -1,15 +1,13 @@
+import datetime
+import importlib
+import os
 from collections import OrderedDict
+
+import chalk
+import pytz
 from django.utils import six
 
 from tiempo.conf import TASK_PATHS
-
-import chalk
-import importlib
-import os
-import datetime
-import pytz
-from dateutil.relativedelta import relativedelta
-from tiempo import REDIS_GROUP_NAMESPACE
 from tiempo.conn import REDIS
 
 
@@ -100,3 +98,18 @@ def all_jobs(groups):
         jobs_dict[group] = REDIS.lrange(name, 0, -1)
     return jobs_dict
 
+
+class JobReport(object):
+
+    def __init__(self, groups_list=None):
+        self.groups = groups_list if groups_list else all_task_groups()
+
+    def __getitem__(self, slice):
+        if slice.step:
+            raise TypeError("JobReport can't be sliced for step with this backend.")
+        keys = REDIS.zrange("all_results", slice.start or 0, slice.stop or -1)
+        pipe = REDIS.pipeline()
+        for key in keys:
+            pipe.hgetall(key)
+        results = pipe.execute()
+        return results

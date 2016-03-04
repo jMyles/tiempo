@@ -1,9 +1,9 @@
-import datetime
 import json
 
 from hendrix.contrib.async.messaging import hxdispatcher
 from twisted.internet import threads
 from constants import BUSY, IDLE
+from calendar import timegm
 
 from tiempo.conn import REDIS
 from tiempo.utils import utc_now, namespace
@@ -46,10 +46,11 @@ class Runner(object):
 
     def cycle(self):
         '''
-        Try to find a job and run it.
+        Tries to find a job and run it.
         If this runner already has a job, returns BUSY.
-        If this runner has no job and there is none to be found, return IDLE.
-        If this runner finds a new job right now, return a Deferred for that job's run().
+        If this runner has no job and there is none to be found, returns IDLE.
+        If this runner finds a new job right now, returns a Deferred for that job's run(),
+            with handle_success and handle_failure as finishing logic.
         '''
 
         # If we have a current Job, return BUSY and go no further.
@@ -74,6 +75,7 @@ class Runner(object):
             self.current_job = job = Job.rehydrate(job_string)
             logger.info("%s adopting %s" % (self, job))
             d = threads.deferToThread(self.run)
+            d.addCallbacks(self.handle_success, self.handle_failure)
             return d
 
     def seek_job(self):
@@ -120,31 +122,40 @@ class Runner(object):
         A callback to handle a successful running of a job
         """
         self.finish_time = utc_now()
-        runner_dict = self.serialize_to_dict()
+        self.result_dict = self.serialize_to_dict()
 
-        runner_dict.update({'result': self.announcer.results_brief})
-        runner_dict.update({'result_detail': json.dumps(self.announcer.results_detail)})
+        self.result_dict.update({'result': self.announcer.results_brief})  # TODO: Make announcer optional
+        self.result_dict.update({'result_detail': json.dumps(self.announcer.results_detail)})
 
-        REDIS.hmset('results:%s' % self.current_job.uid, runner_dict)
+        with REDIS.pipeline() as pipe:
+            backend_response = self.push_disposition_to_backend('s')  # s for success
+            return backend_response
         # TODO: Add some kind of trim here so that results:* don't grow huge.
-        ##
 
-        return
+        return backend_response
 
-    def handle_error(self, failure):
+    def handle_failure(self, failure):
         """
         A callback to handle a failed attempt at running a job
         """
         self.finish_time = utc_now()
         self.error_state = True
         logger.info(failure.getBriefTraceback())  # TODO: What level do we want this to be?
-        runner_dict = self.serialize_to_dict()
-        runner_dict.update({'result': str(failure.value)})
-        detail = runner_dict['result_detail'] = self.announcer.results_detail
+        self.result_dict = self.serialize_to_dict()
+        self.result_dict.update({'result': str(failure.value)})
+        detail = self.result_dict['result_detail'] = self.announcer.results_detail
         detail.append(str(failure.getTraceback()))
-        REDIS.hset('results:%s' % self.current_job.uid, runner_dict)
+        backend_response = self.push_disposition_to_backend('f')  # f for failure
+        return backend_response
 
-        return
+    def push_disposition_to_backend(self, result_abbreviation):
+        with REDIS.pipeline() as pipe:
+            now_timestamp = timegm(utc_now().utctimetuple())
+            pipe.zadd("results:%s" % self.current_job.task.key, now_timestamp, "s:%s" % self.current_job.uid)
+            pipe.zadd("all_results", now_timestamp, "%s:%s" % (result_abbreviation, self.current_job.uid))
+            pipe.hmset('%s:%s' % (result_abbreviation, self.current_job.uid), self.result_dict)
+            backend_response = pipe.execute()
+        return backend_response
 
     def serialize_to_dict(self, alert=False):
 
@@ -201,6 +212,8 @@ class Runner(object):
         for runner_list in RUNNERS.values():
             if self in runner_list:
                 runner_list.remove(self)
+        del self
+
 
 def cleanup(runner, *args, **kwargs):
     """
@@ -216,6 +229,7 @@ def cleanup(runner, *args, **kwargs):
     new_runner = Runner(number, task_groups)
     runner.shut_down
     return new_runner
+
 
 def cleanup_errors(failure, runner):
     logger.error(failure)

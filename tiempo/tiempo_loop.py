@@ -26,6 +26,7 @@ logger = Logger()
 ps = REDIS.pubsub()
 update_queue = create_event_queue()
 
+
 def cycle():
     """This function runs in the event loop for tiempo"""
     # This loop does five things:
@@ -63,12 +64,14 @@ def let_runners_pick_up_queued_tasks():
             # Otherwise, it will have JUST PICKED UP A TASK.
             # If this is the case, it will have returned a Deferred.
             # We add our paths for success and failure here.
-            result.addCallbacks(runner.handle_success, runner.handle_error)
-            result.addCallback(cleanup, runner)
-            result.addErrback(cleanup_errors, runner)
+
+	    # TODO: Sort this out.
+            # result.addCallback(cleanup, runner)
+            # result.addErrback(cleanup_errors, runner)
+            pass
 
         runner.announce('runners')  # The runner may have changed state; announce it.
-    return
+    return result
 
 def queue_scheduled_tasks(backend_events):
     """
