@@ -7,6 +7,7 @@ import chalk
 import pytz
 from django.utils import six
 
+from tiempo import REDIS_GROUP_NAMESPACE, all_task_groups
 from tiempo.conf import TASK_PATHS
 from tiempo.conn import REDIS
 
@@ -100,16 +101,40 @@ def all_jobs(groups):
 
 
 class JobReport(object):
+    '''
+    Vaguely emulates some of the behavior of a Django queryset.
+    For use in lazily evaluating redis queries for serialization.
+    Almost certainly belongs in a different module.
+    '''
 
-    def __init__(self, groups_list=None):
-        self.groups = groups_list if groups_list else all_task_groups()
+    limit = 0
+    offset = 0
+    has_been_evaluated = False
+
+    def __init__(self, key=None):
+        self.key = "results:%s" % key if key else "all_results"
 
     def __getitem__(self, slice):
         if slice.step:
             raise TypeError("JobReport can't be sliced for step with this backend.")
-        keys = REDIS.zrange("all_results", slice.start or 0, slice.stop or -1)
+        self.limit = slice.start
+        self.offset = slice.stop
+        return self.results()
+
+    def __len__(self):
+        return len(self.results())
+
+    def evaluate(self):
+        keys = REDIS.zrange(self.key, self.limit or 0, self.offset or -1)
         pipe = REDIS.pipeline()
         for key in keys:
             pipe.hgetall(key)
-        results = pipe.execute()
-        return results
+        self._results = pipe.execute()
+
+    def results(self):
+        if not self.has_been_evaluated:
+            self.evaluate()
+        return self._results
+
+    def count(self):
+        return REDIS.zcard(self.key)

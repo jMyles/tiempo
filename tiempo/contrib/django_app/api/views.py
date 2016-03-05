@@ -1,16 +1,16 @@
 from rest_framework import viewsets
-from rest_framework.pagination import LimitOffsetPagination
-
-from tiempo.contrib.django_app.api.serializers import JobSerializer
+from tiempo.contrib.django_app.api.serializers import JobSerializer, JobsPaginator
 from tiempo.utils import JobReport
 
 
 class TiempoHistoryViewSet(viewsets.GenericViewSet):
-    pagination_class = LimitOffsetPagination
+    pagination_class = JobsPaginator
     serializer_class = JobSerializer
+    queryset = JobReport()
 
     def list(self, request):
-        jobs = JobReport()[:50]
-        return self.get_serializer(jobs, many=True)
+        oaginated = self.paginate_queryset(self.get_queryset())
+        response = self.get_paginated_response(paginated)
+        return response
 
 
