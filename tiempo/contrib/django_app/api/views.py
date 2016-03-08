@@ -9,7 +9,7 @@ class TiempoHistoryViewSet(viewsets.GenericViewSet):
     queryset = JobReport()
 
     def list(self, request):
-        oaginated = self.paginate_queryset(self.get_queryset())
+        paginated = self.paginate_queryset(self.get_queryset())
         response = self.get_paginated_response(paginated)
         return response
 

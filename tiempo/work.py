@@ -57,6 +57,7 @@ class Job(object):
     def __init__(self, task, reconstitute_from=None, report_handler=None):
 
         self.task = task
+        self.data = {}
 
         if reconstitute_from:
             self.uid = reconstitute_from['uid']
@@ -196,7 +197,7 @@ class Job(object):
 
         data = {
             'key': self.task.key,
-            'uid':self.uid,
+            'uid': self.uid,
             'start': self.start_time.strftime('%y/%m/%d %I:%M%p'),
         }
 
@@ -461,7 +462,7 @@ class Trabajo(object):
         '''
         Takes a datetime, window_begin, which defaults to utc_now()
         without microseconds.
-        Takes a datetime, window_end, which default to one hour after dt.
+        Takes a datetime, window_end, which default to SCHEDULE_AHEAD_MINUTES after window_begin.
 
         Checks to see if this task can be enqueued at 1 or more times
         between window_begin and window_end.
@@ -473,7 +474,7 @@ class Trabajo(object):
         if window_begin:
             window_begin.replace(microsecond=0)
         else:
-            window_begin= utc_now().replace(microsecond=0)
+            window_begin = utc_now().replace(microsecond=0)
 
         window_end = window_end or window_begin + datetime.timedelta(minutes=SCHEDULE_AHEAD_MINUTES)
 

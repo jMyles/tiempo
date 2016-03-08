@@ -1,6 +1,6 @@
 from django.conf.urls import patterns, url, include
 
-from tiempo.contrib.django_app.api import tiempo_api_router
+from tiempo.contrib.django_app.api.urls import tiempo_api_router
 from tiempo.contrib.django_app.views import TiempoKiosk
 
 urlpatterns = patterns(

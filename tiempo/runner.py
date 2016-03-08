@@ -1,18 +1,18 @@
 import json
-
-from hendrix.contrib.async.messaging import hxdispatcher
-from twisted.internet import threads
-from constants import BUSY, IDLE
 from calendar import timegm
 
+from twisted.internet import threads
+from twisted.logger import Logger
+from twisted.python.failure import Failure
+
+from constants import BUSY, IDLE
+from hendrix.contrib.async.messaging import hxdispatcher
+from tiempo import RUNNERS
 from tiempo.conn import REDIS
 from tiempo.utils import utc_now, namespace
 from tiempo.work import Job
-from tiempo import RUNNERS
-from twisted.python.failure import Failure
-from twisted.logger import Logger
 logger = Logger()
-import traceback
+from twisted.internet import defer
 
 
 class Runner(object):
@@ -44,13 +44,23 @@ class Runner(object):
     def __repr__(self):
         return 'Tiempo Runner %d' % self.number
 
-    def cycle(self):
+    def cycle(self, block=False):
         '''
         Tries to find a job and run it.
         If this runner already has a job, returns BUSY.
         If this runner has no job and there is none to be found, returns IDLE.
-        If this runner finds a new job right now, returns a Deferred for that job's run(),
+
+        If this runner finds a new job right now:
+            returns a Deferred for that job's run(),
             with handle_success and handle_failure as finishing logic.
+
+            If block is False, which is the sensible option most of the time,
+                the Deferred is called on a thread.
+
+            If bock is True, which makes sense for manual use cases and tests,
+                the Deferred is executed immediately in the calling thread.
+
+
         '''
 
         # If we have a current Job, return BUSY and go no further.
@@ -70,12 +80,17 @@ class Runner(object):
             # If we didn't get a job, we're IDLE.
             return IDLE
         else:
-            # If we did get a job, we're ready to defer it and return the Deferred.
+            # If we did get a job, we're ready to adopt it.
             self.action_time = utc_now()
             self.current_job = job = Job.rehydrate(job_string)
             logger.info("%s adopting %s" % (self, job))
-            d = threads.deferToThread(self.run)
+
+            if not block:
+                d = threads.deferToThread(self.run)
+            else:
+                d = defer.execute(self.run)
             d.addCallbacks(self.handle_success, self.handle_failure)
+            d.addBoth(self.cleanup)
             return d
 
     def seek_job(self):
@@ -129,8 +144,7 @@ class Runner(object):
 
         with REDIS.pipeline() as pipe:
             backend_response = self.push_disposition_to_backend('s')  # s for success
-            return backend_response
-        # TODO: Add some kind of trim here so that results:* don't grow huge.
+        # TODO: Add some kind of trim or expiry here so that results:* don't grow huge.
 
         return backend_response
 
@@ -147,6 +161,17 @@ class Runner(object):
         detail.append(str(failure.getTraceback()))
         backend_response = self.push_disposition_to_backend('f')  # f for failure
         return backend_response
+
+    def cleanup(self, backend_response):
+        """Takes a Runner instance and sanitizes it. !Destructive Function!"""
+
+        self.current_job.finish()
+
+        self.current_job = self.start_time = self.finish_time = None
+
+        self.error_state = False
+        self.announce('runners')  # Announce that the runner is back to idle.
+        return backend_response # And go back to cycling.
 
     def push_disposition_to_backend(self, result_abbreviation):
         with REDIS.pipeline() as pipe:
@@ -213,25 +238,3 @@ class Runner(object):
             if self in runner_list:
                 runner_list.remove(self)
         del self
-
-
-def cleanup(runner, *args, **kwargs):
-    """
-    A callback for runner management.
-
-    Creates a new runner and shutsdown the old one.
-    """
-    if isinstance(runner, Failure):
-        logger.info("%s failed" % runner, *args, **kwargs)
-        return
-    number = runner.number
-    task_groups = runner.task_groups
-    new_runner = Runner(number, task_groups)
-    runner.shut_down
-    return new_runner
-
-
-def cleanup_errors(failure, runner):
-    logger.error(failure)
-    return cleanup(runner)
-

@@ -1,3 +1,4 @@
+from twisted.internet.defer import gatherResults
 from twisted.trial.unittest import TestCase
 from tiempo import TIEMPO_REGISTRY
 from tiempo.conn import REDIS
@@ -19,8 +20,18 @@ class OneRunnerTestCase(TestCase):
         TIEMPO_REGISTRY.clear()
         super(OneRunnerTestCase, self).tearDown()
 
-    def make_task_and_job_for_runner(self):
+    def make_one_task_and_one_job_for_runner(self):
         task = hourly_task(some_callable)
         job = task.spawn_job_and_run_soon()
         d = self.runner.cycle()
         return d
+
+    def make_one_task_and_many_jobs_for_runner(self, number_of_jobs):
+        self.task = hourly_task(some_callable)
+        self.jobs = []
+        self._deferred_list = []
+        for i in range(number_of_jobs):
+            self.jobs.append(self.task.spawn_job_and_run_soon())
+            self._deferred_list.append(self.runner.cycle(block=True))
+        self.combo_deferred = gatherResults(self._deferred_list)
+        return self.combo_deferred

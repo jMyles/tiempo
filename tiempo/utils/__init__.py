@@ -111,25 +111,28 @@ class JobReport(object):
     offset = 0
     has_been_evaluated = False
 
-    def __init__(self, key=None):
+    def __init__(self, key=None, start=0, stop=-1):
         self.key = "results:%s" % key if key else "all_results"
+        self.start = start
+        self.stop = stop
 
     def __getitem__(self, slice):
         if slice.step:
             raise TypeError("JobReport can't be sliced for step with this backend.")
-        self.limit = slice.start
-        self.offset = slice.stop
+        self.start = slice.start if slice.start is not None else self.start
+        self.stop = slice.stop - 1 if slice.stop is not None else self.stop  # redis is inclusive, hence the -1.
         return self.results()
 
     def __len__(self):
         return len(self.results())
 
     def evaluate(self):
-        keys = REDIS.zrange(self.key, self.limit or 0, self.offset or -1)
+        keys = REDIS.zrange(self.key, self.start, self.stop)
         pipe = REDIS.pipeline()
         for key in keys:
             pipe.hgetall(key)
         self._results = pipe.execute()
+        self.has_been_evaluated = True
 
     def results(self):
         if not self.has_been_evaluated:

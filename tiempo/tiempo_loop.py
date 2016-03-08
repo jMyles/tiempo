@@ -19,7 +19,6 @@ from tiempo.conn import REDIS, subscribe_to_backend_notifications, create_event_
 from tiempo.utils import namespace, utc_now
 from tiempo.work import announce_tasks_to_client
 from tiempo.locks import schedule_lock
-from tiempo.runner import cleanup, cleanup_errors
 from tiempo.queueing import queue_expired_tasks, queue_jobs
 
 logger = Logger()

@@ -9,12 +9,6 @@ class JobsPaginator(LimitOffsetPagination):
     default_limit = 50
     offset = 0
 
-    def __init__(self, *args, **kwargs):
-        super(JobsPaginator, self).__init__(*args, **kwargs)
-
-    def get_paginated_response(self, data):
-        return super(JobsPaginator, self).get_paginated_response(data)
-
 
 class JobSerializer(serializers.BaseSerializer):
 
