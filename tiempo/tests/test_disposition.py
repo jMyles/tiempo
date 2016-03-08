@@ -1,5 +1,5 @@
 from tiempo.conn import REDIS
-from tiempo.tests.sample_tasks import some_callable
+from tiempo.tests.sample_tasks import some_callable, some_callable_that_raises_an_error
 from tiempo.tests.testing_utils import OneRunnerTestCase
 from tiempo.utils.premade_decorators import hourly_task
 
@@ -22,3 +22,14 @@ class SuccessAndErrorsTests(OneRunnerTestCase):
         # Now that we have the hash key, we can get the details of the run.
         job_report = REDIS.hgetall(hash_key)
         self.assertIn(test_message, job_report['result'])  # TODO: Why isn't this actually the string?  Why 'in'?
+
+    def test_runner_failure(self):
+        d = self.make_one_task_and_one_job_for_runner(some_callable_that_raises_an_error)
+
+        def what_happened(backend_response, job_uid, test_case):
+            test_case.assertTrue(REDIS.exists('f:%s' % job_uid))
+            job_info = REDIS.hgetall('f:%s' % job_uid)
+            test_case.assertTrue(job_info['error'])
+
+        d.addCallbacks(what_happened, callbackKeywords={'job_uid': self.runner.current_job.uid, 'test_case': self})
+        return d

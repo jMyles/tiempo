@@ -20,8 +20,8 @@ class OneRunnerTestCase(TestCase):
         TIEMPO_REGISTRY.clear()
         super(OneRunnerTestCase, self).tearDown()
 
-    def make_one_task_and_one_job_for_runner(self):
-        task = hourly_task(some_callable)
+    def make_one_task_and_one_job_for_runner(self, f=some_callable):
+        task = hourly_task(f)
         job = task.spawn_job_and_run_soon()
         d = self.runner.cycle()
         return d
