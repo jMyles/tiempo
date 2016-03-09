@@ -19,11 +19,6 @@ class TiempoMessageProtocol(MessageHandlerProtocol):
 
         if data == "updateJobs":
             # TODO: Better way to announce jobs
-
-            hxdispatcher.send('all_tasks', {'jobs': self.jobs_to_announce()})
-
-            # All completed jobs. # TODO: Move these things to their own place.
-            all_completed = completed_jobs()
-            hxdispatcher.send('results', {'results': all_completed})
+            hxdispatcher.send('results', {'results': self.jobs_to_announce()})
         else:
             return MessageHandlerProtocol.dataReceived(self, data)

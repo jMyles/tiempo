@@ -85,6 +85,7 @@ def queue_scheduled_tasks(backend_events):
     queue_jobs(run_now)
     return
 
+
 def schedule_tasks_for_queueing():
     """
     Takes no arguments. Schedules runtimes and adds them to redis.
@@ -118,6 +119,7 @@ def schedule_tasks_for_queueing():
         pipe.execute()
     schedule_lock.release()
 
+
 def broadcast_new_announcements_to_listeners(events):
 
     try:
@@ -125,10 +127,20 @@ def broadcast_new_announcements_to_listeners(events):
     except IndexError:
         return
     if not event['type'] == 'psubscribe':
-        key = event['channel'].split(':', 1)[1]
-        if key == "expired":
+        channel = event['channel'].split(':', 1)[1]
+        if channel == "expired":
             return
-        new_value = REDIS.hgetall(key)
+        try:
+            key = REDIS.zrange(channel, 0, 0)[0]
+        except:
+            channel
+        if "results" in key:
+            return
+
+        if key.startswith('s:' or 'f:'):  # This is either a success or failure notice.
+            job_information = REDIS.hgetall(key)
+
+        new_value = job_information  # TODO: what's going on here?
         channel_to_announce = key.split(':', 1)[0]
         if new_value.has_key('jobUid'):
             hxdispatcher.send(channel_to_announce,
@@ -138,6 +150,11 @@ def broadcast_new_announcements_to_listeners(events):
 
 
 def start():
+    """
+    Starts running the tiempo_loop at an interval.
+
+    TODO 2.0: Add tuning knobs for interval times
+    """
 
     subscribe_to_backend_notifications()
 
@@ -146,6 +163,6 @@ def start():
     if not looper.running:
         looper.start(1)  # TODO: Customize interval
         task.LoopingCall(announce_tasks_to_client).start(5)
-        task.LoopingCall(schedule_tasks_for_queueing).start(30)
+        task.LoopingCall(schedule_tasks_for_queueing).start(5)
     else:
         logger.warning("Tried to call tiempo_loop start() while the loop is already running.")
